@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>External API Lookup Template</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"
+        integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css"
+        href="https://unpkg.com/@contentstack/ui-extensions-sdk@2.2.0/dist/ui-extension-sdk.css">
+
+</head>
+
+<body>
+    <div class="container">
+        <div class="cs-form-group">
+            <button class="btn cs-btn-success"> Publish with Nested References </button>
+        </div>
+    </div>
+    <script src="https://unpkg.com/@contentstack/ui-extensions-sdk@2.2.0/dist/ui-extension-sdk.js"></script>
+    <script>
+        let extensionField;
+        let firstEntry = true;
+        ContentstackUIExtension.init().then(async function (e) {
+            extensionField = e;
+            let entry = extensionField.entry.getData();
+
+            //let references = await findReferences(entry);
+            // console.log(references);
+            await addReferences(entry);
+
+        })
+
+        async function addReferences(data) {
+            /*
+            1. push original entry references
+            2. loop through all references and their references
+            3. only push reference reference's not assets.
+            */
+            let allReferences = [];
+            let stack = new Array();
+            stack.push(data);
+            while (stack.length != 0) {
+                let entry = stack.pop();
+                let newReferences = await findReferences(entry);
+                for (var i in newReferences) {
+                    allReferences.push(newReferences[i]); // Add to overall
+                    if (newReferences[i].type == "reference") {
+                        let newEntry = newReferences[i];
+                        stack.push(newEntry);
+                        console.log("Stack: ", stack, newEntry);
+                    }
+                }
+
+            }
+            console.log(allReferences);
+
+        }
+
+
+        async function findReferences(entry) {
+            let references = [];
+            if (!firstEntry) {
+                entry = await extensionField.stack.ContentType(entry._content_type_uid).Entry(entry.uid).fetch();
+            }
+            for (var key in entry) { // Loop through data
+                if (Array.isArray(entry[key])) // For Arrays get content uid and name
+                {
+                    for (var obj in entry[key]) {
+                        let field = entry[key][obj];
+                        if (field.hasOwnProperty("uid")) {
+                            let obj = {};
+                            obj.type = "reference";
+                            obj.uid = field["uid"];
+                            obj._content_type_uid = field["_content_type_uid"];
+                            references.push(JSON.stringify(obj));
+                        }
+                    }
+                }
+                else if (typeof entry[key] === 'object') { // For files, get filename and uid
+                    let field = entry[key]
+                    if (field.hasOwnProperty("uid")) {
+                        let obj = {};
+                        obj.type = "asset";
+                        obj.uid = field["uid"];
+                        obj._content_type_uid = field["filename"];
+                        references.push(JSON.stringify(obj));
+                    }
+                }
+            }
+            firstEntry = false;
+            return references;
+        }
+    </script>
+</body>
+
+</html>
