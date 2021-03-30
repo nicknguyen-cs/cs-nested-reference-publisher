@@ -22,15 +22,15 @@
 </head>
 
 <body>
-    <div class="">
+    <div id="nesteddiv">
 
-        <div class=" mb-2" role="group">
-            <button type="button" class="btn cs-btn-circle" onclick="selectAll()">
-                Select All
-            </button>
-            <button type="button" class="btn cs-btn-circle" onclick="deselectAll()">
-                Deselect All
-            </button>
+<div class=" mb-2" role="group" >
+        <button type="button" class="btn cs-btn-circle" onclick="selectAll()">
+            Select All
+        </button>
+        <button type="button" class="btn cs-btn-circle" onclick="deselectAll()">
+            Deselect All
+        </button>
         </div>
 
         <table class="table table-sm">
@@ -91,35 +91,37 @@
         ContentstackUIExtension.init().then(async function (e) {
             extensionField = e;
             let entry = extensionField.entry.getData();
+            entry._content_type_uid = extensionField.entry.content_type.uid;
             let allReferences = await addReferences(entry);
             buildTableRows(allReferences);
-            extensionField.window.updateHeight(1000);
-
+            extensionField.window.updateHeight();
         })
 
 
         function selectAll() {
             let checkboxes = document.getElementsByName('referenceboxes');
-            for (let i = 0, n = checkboxes.length; i < n; i++) {
+            for(let i=0, n=checkboxes.length;i<n;i++) {
                 checkboxes[i].checked = true;
-            }
+             }
         }
 
         function deselectAll() {
             let checkboxes = document.getElementsByName('referenceboxes');
-            for (let i = 0, n = checkboxes.length; i < n; i++) {
+             for(let i=0, n=checkboxes.length;i<n;i++) {
                 checkboxes[i].checked = false;
-            }
+             }
         }
-
+        
         async function addReferences(data) { // Find all references.
             let stack = new Array();
             stack.push(JSON.stringify(data));
             while (stack.length != 0) {
                 let entry = JSON.parse(stack.pop());
                 let newReferences = await findReferences(entry);
-                if (allReferences.length == 0)
+                if (allReferences.length == 0) {
                     allReferences.push(newReferences[0]);
+                    stack.push(JSON.stringify(newReferences[0]));
+                }
                 for (let i in newReferences) {
                     let flag = true;
                     for (let j in allReferences) {
@@ -173,6 +175,7 @@
                     }
                 }
             }
+            console.log(references);
             firstEntry = false;
             return references;
         }
@@ -265,7 +268,6 @@
             }
             return results;
         }
-
 
     </script>
     <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
