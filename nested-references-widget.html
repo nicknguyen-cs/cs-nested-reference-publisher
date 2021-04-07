@@ -24,13 +24,13 @@
 <body>
     <div id="nesteddiv">
 
-<div class=" mb-2" role="group" >
-        <button type="button" class="btn cs-btn-circle" onclick="selectAll()">
-            Select All
-        </button>
-        <button type="button" class="btn cs-btn-circle" onclick="deselectAll()">
-            Deselect All
-        </button>
+        <div class=" mb-2" role="group">
+            <button type="button" class="btn cs-btn-circle" onclick="selectAll()">
+                Select All
+            </button>
+            <button type="button" class="btn cs-btn-circle" onclick="deselectAll()">
+                Deselect All
+            </button>
         </div>
 
         <table class="table table-sm">
@@ -92,49 +92,63 @@
             extensionField = e;
             let entry = extensionField.entry.getData();
             entry._content_type_uid = extensionField.entry.content_type.uid;
+            extensionField.entry.onChange(async function (e) {
+                firstEntry = true;
+                allReferences = [];
+                e._content_type_uid = extensionField.entry.content_type.uid;
+                await buildTable(e);
+                extensionField.window.updateHeight();
+            })
+        })
+
+        async function buildTable(entry) {
             let allReferences = await addReferences(entry);
             buildTableRows(allReferences);
-            extensionField.window.updateHeight();
-        })
+        }
 
 
         function selectAll() {
             let checkboxes = document.getElementsByName('referenceboxes');
-            for(let i=0, n=checkboxes.length;i<n;i++) {
+            for (let i = 0, n = checkboxes.length; i < n; i++) {
                 checkboxes[i].checked = true;
-             }
+            }
         }
 
         function deselectAll() {
             let checkboxes = document.getElementsByName('referenceboxes');
-             for(let i=0, n=checkboxes.length;i<n;i++) {
+            for (let i = 0, n = checkboxes.length; i < n; i++) {
                 checkboxes[i].checked = false;
-             }
+            }
         }
-        
+
         async function addReferences(data) { // Find all references.
             let stack = new Array();
             stack.push(JSON.stringify(data));
             while (stack.length != 0) {
-                let entry = JSON.parse(stack.pop());
-                let newReferences = await findReferences(entry);
-                if (allReferences.length == 0) {
-                    allReferences.push(newReferences[0]);
-                    stack.push(JSON.stringify(newReferences[0]));
-                }
-                for (let i in newReferences) {
-                    let flag = true;
-                    for (let j in allReferences) {
-                        if (newReferences[i].uid == allReferences[j].uid) {
-                            flag = false;
+                let entry = stack.pop();
+                if (entry) {
+                    entry = JSON.parse(entry);
+                    let newReferences = await findReferences(entry);
+                    if (newReferences.length > 0) {
+                        if (allReferences.length == 0) {
+                            allReferences.push(newReferences[0]);
+                            stack.push(JSON.stringify(newReferences[0]));
                         }
-                    }
-                    if (flag) {
-                        allReferences.push(newReferences[i]);
-                        if (newReferences[i].type == "reference") {
-                            let newEntry = newReferences[i];
-                            stack.push(JSON.stringify(newEntry));
-                            flag = true;
+                        for (let i in newReferences) {
+                            let flag = true;
+                            for (let j in allReferences) {
+                                if (newReferences[i].uid == allReferences[j].uid) {
+                                    flag = false;
+                                }
+                            }
+                            if (flag) {
+                                allReferences.push(newReferences[i]);
+                                if (newReferences[i].type == "reference") {
+                                    let newEntry = newReferences[i];
+                                    stack.push(JSON.stringify(newEntry));
+                                    flag = true;
+                                }
+                            }
                         }
                     }
                 }
@@ -154,11 +168,16 @@
                     for (var obj in entry[key]) {
                         let field = entry[key][obj];
                         if (field.hasOwnProperty("uid")) {
+                            /*
                             let obj = {};
                             obj.type = "reference";
                             obj.uid = field["uid"];
                             obj._content_type_uid = field["_content_type_uid"];
-                            references.push(obj);
+                            */
+                            let obj = await extensionField.stack.ContentType(field["_content_type_uid"]).Entry(field["uid"]).fetch();
+                            obj.entry.type = "reference";
+                            obj.entry._content_type_uid = field["_content_type_uid"];
+                            references.push(obj.entry);
                         }
                     }
                 }
@@ -166,29 +185,35 @@
                     let field = entry[key]
                     if (field) {
                         if (field.hasOwnProperty("uid")) {
+                            /*  
                             let obj = {};
                             obj.type = "asset";
                             obj.uid = field["uid"];
                             obj._content_type_uid = field["filename"];
+                            */
+                            let obj = await extensionField.stack.Asset(field["uid"]);
+                            obj.type = "asset";
+                            obj._content_type_uid = field["filename"];
+                            obj.title = field["filename"];
                             references.push(obj);
                         }
                     }
                 }
             }
-            console.log(references);
             firstEntry = false;
             return references;
         }
 
         function buildTableRows(allReferences) {
             let table = document.getElementById("rows");
+            table.innerHTML = "";
             for (var i in allReferences) {
                 let tr = document.createElement("tr");
                 tr.id = allReferences[i].uid;
                 let div1 = document.createElement("td");
                 div1.innerHTML = capitalize(allReferences[i].type);
                 let div2 = document.createElement("td");
-                div2.innerHTML = allReferences[i]._content_type_uid;
+                div2.innerHTML = allReferences[i].title;
                 let div3 = document.createElement("td");
                 div3.innerHTML = allReferences[i].uid;
                 tr.appendChild(buildCheckbox(allReferences[i]));
@@ -202,7 +227,7 @@
         function buildCheckbox(entry) {
             let td = document.createElement("td");
             let checkbox = document.createElement('input');
-            checkbox.onchange = 'appendList()';
+            checkbox.onchange = 'appendList()'; // TODO
             checkbox.name = 'referenceboxes'
             checkbox.type = 'checkbox';
             checkbox.id = entry.uid;
