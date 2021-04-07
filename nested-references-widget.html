@@ -85,6 +85,12 @@
     </div>
     <script src="https://unpkg.com/@contentstack/ui-extensions-sdk@2.2.0/dist/ui-extension-sdk.js"></script>
     <script>
+
+        /*
+            1. Append entries to the confirmation list
+            2. Only update references list when new references are added.
+            3. Clean up the UI.
+        */
         let extensionField;
         let firstEntry = true;
         let allReferences = [];
@@ -93,8 +99,8 @@
             let entry = extensionField.entry.getData();
             entry._content_type_uid = extensionField.entry.content_type.uid;
             extensionField.entry.onChange(async function (e) {
-                firstEntry = true;
-                allReferences = [];
+                firstEntry = true; // Reset the algo when a user changes values
+                allReferences = []; // Reset the references when a user changes values
                 e._content_type_uid = extensionField.entry.content_type.uid;
                 await buildTable(e);
                 extensionField.window.updateHeight();
@@ -121,7 +127,7 @@
             }
         }
 
-        async function addReferences(data) { // Find all references.
+        async function addReferences(data) { // I use a DFS with a stack, until there are no references left.
             let stack = new Array();
             stack.push(JSON.stringify(data));
             while (stack.length != 0) {
@@ -129,15 +135,15 @@
                 if (entry) {
                     entry = JSON.parse(entry);
                     let newReferences = await findReferences(entry);
-                    if (newReferences.length > 0) {
-                        if (allReferences.length == 0) {
+                    if (newReferences.length > 0) { 
+                        if (allReferences.length == 0) { // If its the start of the references, then push the first new reference.
                             allReferences.push(newReferences[0]);
                             stack.push(JSON.stringify(newReferences[0]));
                         }
                         for (let i in newReferences) {
                             let flag = true;
                             for (let j in allReferences) {
-                                if (newReferences[i].uid == allReferences[j].uid) {
+                                if (newReferences[i].uid == allReferences[j].uid) { // To prevent circular dependency, check if its unique reference.
                                     flag = false;
                                 }
                             }
@@ -156,24 +162,18 @@
             return allReferences;
         }
 
-        async function findReferences(entry) { // Find all references for current entry in search.
+        async function findReferences(entry) {
             let references = [];
-            if (!firstEntry) {
+            if (!firstEntry) { // The first entry comes in as an entire object, the concurrent references we need the data.
                 entry = await extensionField.stack.ContentType(entry._content_type_uid).Entry(entry.uid).fetch();
                 entry = entry.entry;
             }
-            for (let key in entry) { // Loop through data
-                if (Array.isArray(entry[key])) // For Arrays get content uid and name
+            for (let key in entry) { 
+                if (Array.isArray(entry[key])) // Parse to check if its an entry reference, if it is an array & contains UID
                 {
                     for (var obj in entry[key]) {
                         let field = entry[key][obj];
                         if (field.hasOwnProperty("uid")) {
-                            /*
-                            let obj = {};
-                            obj.type = "reference";
-                            obj.uid = field["uid"];
-                            obj._content_type_uid = field["_content_type_uid"];
-                            */
                             let obj = await extensionField.stack.ContentType(field["_content_type_uid"]).Entry(field["uid"]).fetch();
                             obj.entry.type = "reference";
                             obj.entry._content_type_uid = field["_content_type_uid"];
@@ -181,16 +181,10 @@
                         }
                     }
                 }
-                else if (typeof entry[key] === 'object') { // For files, get filename and uid
+                else if (typeof entry[key] === 'object') { // Parse to check if its an asset, if it is an object & contains UID
                     let field = entry[key]
                     if (field) {
                         if (field.hasOwnProperty("uid")) {
-                            /*  
-                            let obj = {};
-                            obj.type = "asset";
-                            obj.uid = field["uid"];
-                            obj._content_type_uid = field["filename"];
-                            */
                             let obj = await extensionField.stack.Asset(field["uid"]);
                             obj.type = "asset";
                             obj._content_type_uid = field["filename"];
@@ -253,12 +247,9 @@
                     await extensionField.stack.ContentType(array[i]._content_type_uid).Entry(array[i].uid)
                         .publish({
                             "entry": {
-                                "locales": [
-                                    "en-us"
-                                ],
-                                "environments": [
-                                    "production"
-                                ]
+                                "locales": extensionField.config.locales,
+                                "environments": extensionField.config.environments
+                                
                             }
                         }).then(function (result) {
                             let row = document.getElementById(array[i].uid);
@@ -274,12 +265,9 @@
                         .publish(
                             {
                                 "asset": {
-                                    "locales": [
-                                        "en-us"
-                                    ],
-                                    "environments": [
-                                        "production"
-                                    ]
+                                    "locales": extensionField.config.locales,
+                                    "environments": extensionField.config.environments
+                                    
                                 }
                             }).then(function (result) {
                                 let row = document.getElementById(array[i].uid);
